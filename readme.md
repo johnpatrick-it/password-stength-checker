@@ -3,3 +3,5 @@
   - Common password detection
   - Pattern detection
   - Breach database checking (HaveIBeenPwned API)
+
+  
