@@ -218,7 +218,7 @@ def check_password_strength(password):
 # Route for homepage
 @app.route('/')
 def index():
-    return "Hello, Flask! Password Checker Coming Soon..."
+    return render_template('index.html')
 
 
 # Route for checking password strength (POST - for API/JavaScript)
