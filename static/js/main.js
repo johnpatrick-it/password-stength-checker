@@ -1,6 +1,7 @@
 // DOM Elements
 const passwordInput = document.getElementById('password');
 const togglePasswordBtn = document.getElementById('togglePassword');
+const copyPasswordBtn = document.getElementById('copyPassword');
 const resultsDiv = document.getElementById('results');
 const emptyState = document.getElementById('emptyState');
 const strengthBar = document.getElementById('strengthBar');
@@ -22,6 +23,45 @@ togglePasswordBtn.addEventListener('click', () => {
     const type = passwordInput.type === 'password' ? 'text' : 'password';
     passwordInput.type = type;
 });
+
+// Copy password to clipboard
+copyPasswordBtn.addEventListener('click', async () => {
+    const password = passwordInput.value;
+
+    if (!password) {
+        showCopyFeedback('No password to copy!', false);
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(password);
+        showCopyFeedback('Copied!', true);
+    } catch (err) {
+        // Fallback for older browsers
+        passwordInput.select();
+        document.execCommand('copy');
+        showCopyFeedback('Copied!', true);
+    }
+});
+
+// Show copy feedback
+function showCopyFeedback(message, success) {
+    const originalHTML = copyPasswordBtn.innerHTML;
+    const color = success ? 'text-green-600' : 'text-red-600';
+
+    copyPasswordBtn.innerHTML = `
+        <svg class="w-6 h-6 ${color}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+    `;
+
+    copyPasswordBtn.title = message;
+
+    setTimeout(() => {
+        copyPasswordBtn.innerHTML = originalHTML;
+        copyPasswordBtn.title = 'Copy password';
+    }, 2000);
+}
 
 // Listen for password input
 passwordInput.addEventListener('input', (e) => {
@@ -203,3 +243,55 @@ function showError() {
     strengthText.className = 'text-lg font-bold text-red-600';
     feedbackList.innerHTML = '<li class="text-red-600">Failed to check password. Please try again.</li>';
 }
+
+// ============================================
+// Privacy Modal Control
+// ============================================
+
+const privacyModal = document.getElementById('privacyModal');
+const closeModalBtn = document.getElementById('closeModal');
+const acceptPrivacyBtn = document.getElementById('acceptPrivacy');
+const dontShowAgainCheckbox = document.getElementById('dontShowAgain');
+const showPrivacyModalBtn = document.getElementById('showPrivacyModal');
+
+// Check if user has dismissed the modal before
+function shouldShowModal() {
+    return !localStorage.getItem('privacyModalDismissed');
+}
+
+// Show modal on page load if not dismissed
+window.addEventListener('load', () => {
+    if (shouldShowModal()) {
+        privacyModal.classList.remove('hidden');
+    } else {
+        privacyModal.classList.add('hidden');
+    }
+});
+
+// Close modal function
+function closeModal() {
+    privacyModal.classList.add('hidden');
+
+    // Save preference if checkbox is checked
+    if (dontShowAgainCheckbox.checked) {
+        localStorage.setItem('privacyModalDismissed', 'true');
+    }
+}
+
+// Close modal on X button
+closeModalBtn.addEventListener('click', closeModal);
+
+// Close modal on Accept button
+acceptPrivacyBtn.addEventListener('click', closeModal);
+
+// Close modal when clicking outside
+privacyModal.addEventListener('click', (e) => {
+    if (e.target === privacyModal) {
+        closeModal();
+    }
+});
+
+// Show modal again when "Learn more" is clicked
+showPrivacyModalBtn.addEventListener('click', () => {
+    privacyModal.classList.remove('hidden');
+});
