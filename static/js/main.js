@@ -14,6 +14,8 @@ const breachText = document.getElementById('breachText');
 const breachAlert = document.getElementById('breachAlert');
 const breachMessage = document.getElementById('breachMessage');
 const feedbackList = document.getElementById('feedbackList');
+const enhanceButtonContainer = document.getElementById('enhanceButtonContainer');
+const enhancePasswordBtn = document.getElementById('enhancePasswordBtn');
 
 // Debounce timer
 let debounceTimer;
@@ -41,6 +43,67 @@ copyPasswordBtn.addEventListener('click', async () => {
         passwordInput.select();
         document.execCommand('copy');
         showCopyFeedback('Copied!', true);
+    }
+});
+
+// Enhance password
+enhancePasswordBtn.addEventListener('click', async () => {
+    const password = passwordInput.value;
+
+    if (!password) {
+        return;
+    }
+
+    // Show loading state
+    const originalHTML = enhancePasswordBtn.innerHTML;
+    enhancePasswordBtn.disabled = true;
+    enhancePasswordBtn.innerHTML = `
+        <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Enhancing...</span>
+    `;
+
+    try {
+        const response = await fetch('/enhance-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ password: password })
+        });
+
+        if (!response.ok) {
+            throw new Error('API request failed');
+        }
+
+        const data = await response.json();
+
+        // Update password input with enhanced password
+        passwordInput.value = data.enhanced_password;
+
+        // Automatically check the new password
+        updateUI(data);
+
+        // Show success feedback
+        enhancePasswordBtn.innerHTML = `
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <span>Password Enhanced!</span>
+        `;
+
+        setTimeout(() => {
+            enhancePasswordBtn.innerHTML = originalHTML;
+            enhancePasswordBtn.disabled = false;
+        }, 2000);
+
+    } catch (error) {
+        console.error('Error enhancing password:', error);
+        enhancePasswordBtn.innerHTML = originalHTML;
+        enhancePasswordBtn.disabled = false;
+        alert('Failed to enhance password. Please try again.');
     }
 });
 
@@ -155,6 +218,13 @@ function updateUI(data) {
             </a>`;
     } else {
         breachAlert.classList.add('hidden');
+    }
+
+    // Show/hide enhance button (show if weak, medium, or breached)
+    if (data.is_breached || data.strength === 'Weak' || data.strength === 'Medium') {
+        enhanceButtonContainer.classList.remove('hidden');
+    } else {
+        enhanceButtonContainer.classList.add('hidden');
     }
 
     // Update feedback list

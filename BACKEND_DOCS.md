@@ -11,6 +11,8 @@ A Flask-based REST API that analyzes password strength using multiple security c
 - **requests 2.32.5** - HTTP library for API calls
 - **re (regex)** - Pattern matching
 - **hashlib** - SHA-1 hashing for breach checking
+- **random** - Random character generation for password enhancement
+- **string** - String constants for character sets
 
 ---
 
@@ -60,6 +62,16 @@ password-strength-checker/
 - Returns breach count (how many times password was leaked)
 - Network-safe: Returns false on API failure (doesn't block users)
 
+### 6. Password Enhancement
+- Automatically strengthens weak or breached passwords
+- Ensures minimum 16 character length
+- Adds missing character types (uppercase, lowercase, digits, special chars)
+- Replaces sequential patterns (123, abc, etc.) with random characters
+- Removes keyboard patterns (qwerty, asdf, etc.)
+- Eliminates repeated characters (aaa, 111, etc.)
+- Adds random suffix to common passwords
+- Triggered via UI button when password is Weak, Medium, or Breached
+
 ---
 
 ## Scoring System
@@ -106,7 +118,31 @@ Response:
 }
 ```
 
-### 3. Test Route (Browser-friendly)
+### 3. Enhance Password (API)
+```
+POST /enhance-password
+Content-Type: application/json
+
+Request Body:
+{
+  "password": "weak123"
+}
+
+Response:
+{
+  "enhanced_password": "weak123Xz7@kL!mN",
+  "score": 90,
+  "strength": "Very Strong",
+  "feedback": ["Excellent password!"],
+  "is_common": false,
+  "has_patterns": false,
+  "is_breached": false,
+  "breach_count": 0,
+  "length": 16
+}
+```
+
+### 4. Test Route (Browser-friendly)
 ```
 GET /test/<password>
 ```
@@ -147,6 +183,36 @@ Main analysis function:
 8. Generates feedback messages
 
 Returns comprehensive dictionary with all results.
+
+### `enhance_password(password)`
+**Password Enhancement Algorithm**
+
+Takes a weak password and strengthens it through multiple steps:
+
+1. **Length Enhancement**: Ensures minimum 16 characters by appending random chars
+2. **Character Variety**: Adds missing character types at random positions
+   - Lowercase letters
+   - Uppercase letters
+   - Digits
+   - Special characters (!@#$%^&*)
+3. **Pattern Replacement**: Uses regex to find and replace weak patterns
+   - Sequential numbers (012, 123, etc.) → random digits
+   - Sequential letters (abc, xyz, etc.) → random letters
+   - Keyboard patterns (qwerty, asdf, etc.) → random letters
+4. **Repeated Characters**: Replaces 3+ repeated chars with random mix
+5. **Common Password Fix**: Adds random 6-char suffix to common passwords
+
+Returns: Enhanced password string
+
+### `generate_strong_password(length=16)`
+**Random Strong Password Generator**
+
+Generates a completely random password from scratch:
+1. Ensures at least one of each character type
+2. Fills remaining length with random chars
+3. Shuffles to avoid predictable patterns
+
+Returns: Randomly generated strong password
 
 ---
 
@@ -213,25 +279,73 @@ Debug mode: ON (auto-reloads on code changes)
 
 ## Example Test Cases
 
-| Password | Expected Result |
-|----------|----------------|
-| `password` | Weak - Common + Breached |
-| `qwerty123` | Weak - Keyboard pattern + Breached |
-| `abc123` | Weak - Sequential letters/numbers |
-| `aaaa1111` | Weak - Repeated characters |
-| `MyS3cure!Pass@2024` | Very Strong - All criteria met |
-| `P@ssw0rd!` | Medium - Common + Breached despite variety |
+| Password | Expected Result | Enhancement Example |
+|----------|----------------|---------------------|
+| `password` | Weak - Common + Breached | `password7!Xm@kLnZ4` |
+| `qwerty123` | Weak - Keyboard pattern + Breached | `ydkLpw561@mN!zXc` |
+| `abc123` | Weak - Sequential letters/numbers | `qlr738!K@pXz4mLn` |
+| `aaaa1111` | Weak - Repeated characters | `ab7c3d2f!@Xm9kLn` |
+| `MyS3cure!Pass@2024` | Very Strong - All criteria met | No enhancement needed |
+| `P@ssw0rd!` | Medium - Common + Breached despite variety | `P@ssw0rd!-mX7kLn` |
 
 ---
 
-## Future Enhancements (Frontend - Next Phase)
+## Frontend Integration
 
-1. HTML/CSS/JavaScript frontend
-2. Real-time password checking as user types
-3. Visual strength indicator (progress bar)
-4. Animated feedback messages
-5. Copy-to-clipboard for generated passwords
-6. Password generator
+### Password Enhancement UI Flow
+
+1. **Button Visibility**: Enhance button appears when:
+   - Password strength is "Weak"
+   - Password strength is "Medium"
+   - Password is found in data breaches
+
+2. **User Interaction**:
+   - User clicks "Enhance This Password" button
+   - Button shows loading spinner with "Enhancing..." text
+   - API call to `/enhance-password` endpoint
+   - Enhanced password replaces original in input field
+   - Password is automatically re-analyzed
+   - Button shows checkmark with "Password Enhanced!" for 2 seconds
+
+3. **Visual Feedback**:
+   - Green gradient button with lightning bolt icon
+   - Animated loading state during processing
+   - Success state with checkmark icon
+   - Automatic re-check shows improved strength score
+
+### JavaScript Implementation
+Location: `static/js/main.js`
+- Debounced password checking (300ms)
+- Async fetch to enhancement endpoint
+- Error handling with user-friendly alerts
+- Seamless UI state management
+
+### HTML Components
+Location: `templates/index.html`
+- Responsive Tailwind CSS design
+- Modal privacy notice
+- Real-time strength indicators
+- Copy-to-clipboard functionality
+- Password visibility toggle
+
+---
+
+## Completed Enhancements
+
+1. ✅ HTML/CSS/JavaScript frontend (Tailwind CSS)
+2. ✅ Real-time password checking as user types (300ms debounce)
+3. ✅ Visual strength indicator (animated progress bar)
+4. ✅ Animated feedback messages
+5. ✅ Copy-to-clipboard for passwords
+6. ✅ Password enhancement feature (auto-strengthen weak passwords)
+
+## Future Enhancements
+
+1. Standalone password generator (random generation without input)
+2. Password history/comparison feature
+3. Multi-language support
+4. Export password strength report as PDF
+5. Browser extension integration
 
 ---
 
@@ -261,8 +375,9 @@ Plus automatic dependencies:
 
 ---
 
-**Backend Status:** ✅ Complete
+**Backend Status:** ✅ Complete (with Password Enhancement Feature)
 
 **Created:** 2026-01-03
+**Last Updated:** 2026-01-06 (Added Password Enhancement)
 
 **Author:** Patrick Haguimit (with Claude Code)

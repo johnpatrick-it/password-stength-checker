@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify
 import re
 import hashlib
 import requests
+import random
+import string
 
 # Create Flask app instance
 app = Flask(__name__)
@@ -215,6 +217,112 @@ def check_password_strength(password):
     }
 
 
+def enhance_password(password):
+    """
+    Enhance a weak password by making it stronger
+
+    Returns: enhanced_password (string)
+    """
+    if not password:
+        # Generate a completely random password if empty
+        return generate_strong_password()
+
+    enhanced = password
+
+    # 1. Ensure minimum length of 16 characters
+    if len(enhanced) < 16:
+        # Add random characters to reach 16 chars
+        chars_needed = 16 - len(enhanced)
+        random_chars = ''.join(random.choices(
+            string.ascii_letters + string.digits + string.punctuation,
+            k=chars_needed
+        ))
+        enhanced += random_chars
+
+    # 2. Ensure it has all character types
+    has_lower = bool(re.search(r'[a-z]', enhanced))
+    has_upper = bool(re.search(r'[A-Z]', enhanced))
+    has_digit = bool(re.search(r'\d', enhanced))
+    has_special = bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', enhanced))
+
+    additions = []
+    if not has_lower:
+        additions.append(random.choice(string.ascii_lowercase))
+    if not has_upper:
+        additions.append(random.choice(string.ascii_uppercase))
+    if not has_digit:
+        additions.append(random.choice(string.digits))
+    if not has_special:
+        additions.append(random.choice('!@#$%^&*'))
+
+    if additions:
+        # Insert missing characters at random positions
+        enhanced_list = list(enhanced)
+        for char in additions:
+            pos = random.randint(0, len(enhanced_list))
+            enhanced_list.insert(pos, char)
+        enhanced = ''.join(enhanced_list)
+
+    # 3. Replace sequential patterns with random chars
+    # Replace sequential numbers
+    enhanced = re.sub(r'(012|123|234|345|456|567|678|789)',
+                     lambda m: ''.join(random.choices(string.digits, k=len(m.group()))),
+                     enhanced)
+
+    # Replace sequential letters (case-insensitive)
+    sequential_letters = ['abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij',
+                         'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr',
+                         'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz']
+    for seq in sequential_letters:
+        if seq in enhanced.lower():
+            # Find and replace while preserving case
+            pattern = re.compile(re.escape(seq), re.IGNORECASE)
+            enhanced = pattern.sub(''.join(random.choices(string.ascii_letters, k=3)), enhanced)
+
+    # 4. Replace keyboard patterns
+    keyboard_patterns = ['qwerty', 'asdfgh', 'zxcvbn', 'qwertyuiop', 'asdfghjkl']
+    for pattern in keyboard_patterns:
+        if pattern in enhanced.lower():
+            replacement = ''.join(random.choices(string.ascii_letters, k=len(pattern)))
+            enhanced = re.sub(re.escape(pattern), replacement, enhanced, flags=re.IGNORECASE)
+
+    # 5. Replace repeated characters (3 or more)
+    enhanced = re.sub(r'(.)\1{2,}', lambda m: m.group(1) + ''.join(random.choices(
+        string.ascii_letters + string.digits, k=len(m.group()) - 1
+    )), enhanced)
+
+    # 6. If it's still a common password, add random suffix
+    if enhanced.lower() in COMMON_PASSWORDS:
+        enhanced += '-' + ''.join(random.choices(
+            string.ascii_letters + string.digits, k=6
+        ))
+
+    return enhanced
+
+
+def generate_strong_password(length=16):
+    """Generate a completely random strong password"""
+    # Ensure at least one of each type
+    password_chars = [
+        random.choice(string.ascii_lowercase),
+        random.choice(string.ascii_uppercase),
+        random.choice(string.digits),
+        random.choice('!@#$%^&*')
+    ]
+
+    # Fill the rest randomly
+    remaining = length - len(password_chars)
+    password_chars.extend(random.choices(
+        string.ascii_letters + string.digits + '!@#$%^&*',
+        k=remaining
+    ))
+
+    # Shuffle to avoid predictable pattern
+    random.shuffle(password_chars)
+
+    return ''.join(password_chars)
+
+
 # Route for homepage
 @app.route('/')
 def index():
@@ -229,6 +337,22 @@ def check_password():
 
     # Analyze password
     result = check_password_strength(password)
+
+    return jsonify(result)
+
+
+# Route for enhancing weak passwords
+@app.route('/enhance-password', methods=['POST'])
+def enhance_password_endpoint():
+    """API endpoint to enhance a weak password"""
+    password = request.json.get('password', '')
+
+    # Enhance the password
+    enhanced = enhance_password(password)
+
+    # Also return the strength check of the enhanced password
+    result = check_password_strength(enhanced)
+    result['enhanced_password'] = enhanced
 
     return jsonify(result)
 
