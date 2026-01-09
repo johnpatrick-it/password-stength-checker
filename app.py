@@ -357,37 +357,6 @@ def enhance_password_endpoint():
     return jsonify(result)
 
 
-# Test route (GET - for browser testing)
-@app.route('/test/<password>')
-def test_password(password):
-    """Test route - visit http://localhost:5000/test/yourpassword"""
-    result = check_password_strength(password)
-
-    # Format as readable HTML
-    html = f"""
-    <h1>Password Strength Checker - Test</h1>
-    <p><strong>Password:</strong> {password}</p>
-    <p><strong>Score:</strong> {result['score']}/100</p>
-    <p><strong>Strength:</strong> <span style="color: {'red' if result['strength'] == 'Weak' else 'orange' if result['strength'] == 'Medium' else 'green'};">{result['strength']}</span></p>
-    <p><strong>Length:</strong> {result['length']} characters</p>
-    <p><strong>Common Password:</strong> {'Yes ⚠️' if result['is_common'] else 'No ✓'}</p>
-    <p><strong>Has Patterns:</strong> {'Yes ⚠️' if result['has_patterns'] else 'No ✓'}</p>
-    <p><strong>Data Breach:</strong> {'Yes - Found in ' + f"{result['breach_count']:,}" + ' breaches! 🚨' if result['is_breached'] else 'No ✓'}</p>
-    <h3>Feedback:</h3>
-    <ul>
-    """
-
-    for item in result['feedback']:
-        html += f"<li>{item}</li>"
-
-    html += """
-    </ul>
-    <p><a href="/">Back to Home</a></p>
-    """
-
-    return html
-
-
 # Run the app
 if __name__ == '__main__':
     app.run(debug=True)
