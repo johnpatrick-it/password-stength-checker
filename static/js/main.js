@@ -83,8 +83,11 @@ enhancePasswordBtn.addEventListener('click', async () => {
         // Update password input with enhanced password
         passwordInput.value = data.enhanced_password;
 
-        // Automatically check the new password
+        // Automatically check the new password (fast check)
         updateUI(data);
+
+        // Trigger async breach check
+        checkBreach(data.enhanced_password);
 
         // Show success feedback
         enhancePasswordBtn.innerHTML = `
@@ -157,9 +160,10 @@ function hideEmptyState() {
     resultsDiv.classList.remove('hidden');
 }
 
-// Check password strength via API
+// Check password strength via API (FAST - without breach check)
 async function checkPassword(password) {
     try {
+        // Phase 1: Quick check (instant response)
         const response = await fetch('/check-password', {
             method: 'POST',
             headers: {
@@ -173,7 +177,12 @@ async function checkPassword(password) {
         }
 
         const data = await response.json();
+
+        // Update UI immediately with fast results
         updateUI(data);
+
+        // Phase 2: Breach check (async - happens in background)
+        checkBreach(password);
 
     } catch (error) {
         console.error('Error checking password:', error);
@@ -182,7 +191,71 @@ async function checkPassword(password) {
     }
 }
 
-// Update UI with results
+// Check breach status separately (async with caching)
+async function checkBreach(password) {
+    // Show loading state for breach check
+    breachText.innerHTML = '<span class="text-xs">⏳ Checking...</span>';
+    breachText.className = 'text-xl font-semibold text-gray-500';
+
+    try {
+        const response = await fetch('/check-breach', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ password: password })
+        });
+
+        if (!response.ok) {
+            throw new Error('Breach check failed');
+        }
+
+        const breachData = await response.json();
+
+        // Update UI with breach results
+        updateBreachUI(breachData);
+
+    } catch (error) {
+        console.error('Error checking breach:', error);
+        // Show error state for breach check only
+        breachText.textContent = '⚠️ Error';
+        breachText.className = 'text-xl font-semibold text-gray-500';
+    }
+}
+
+// Update breach status in UI
+function updateBreachUI(breachData) {
+    breachText.textContent = breachData.is_breached ? '🚨 Yes' : '✓ No';
+    breachText.className = `text-xl font-semibold ${breachData.is_breached ? 'text-red-600' : 'text-green-600'}`;
+
+    // Show/hide breach alert
+    if (breachData.is_breached) {
+        breachAlert.classList.remove('hidden');
+        breachMessage.innerHTML = `WARNING: This password was found in ${breachData.breach_count.toLocaleString()} data breaches!
+            <a href="https://haveibeenpwned.com/Passwords" target="_blank" class="underline hover:text-red-900 font-bold">
+                Learn more →
+            </a>`;
+
+        // Also add warning to feedback if breach found
+        const feedbackContainer = document.getElementById('feedbackList');
+        const warningLi = document.createElement('li');
+        warningLi.className = 'flex items-start text-red-700 font-semibold';
+        warningLi.innerHTML = `
+            <svg class="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+            <span>WARNING: Found in ${breachData.breach_count.toLocaleString()} data breaches!</span>
+        `;
+        feedbackContainer.insertBefore(warningLi, feedbackContainer.firstChild);
+
+        // Show enhance button if breached
+        enhanceButtonContainer.classList.remove('hidden');
+    } else {
+        breachAlert.classList.add('hidden');
+    }
+}
+
+// Update UI with results (FAST - without breach data)
 function updateUI(data) {
     hideEmptyState();
 
@@ -206,22 +279,15 @@ function updateUI(data) {
     patternsText.textContent = data.has_patterns ? '⚠️ Yes' : '✓ No';
     patternsText.className = `text-xl font-semibold ${data.has_patterns ? 'text-orange-600' : 'text-green-600'}`;
 
-    breachText.textContent = data.is_breached ? '🚨 Yes' : '✓ No';
-    breachText.className = `text-xl font-semibold ${data.is_breached ? 'text-red-600' : 'text-green-600'}`;
+    // Set breach to loading state (will be updated by checkBreach function)
+    breachText.innerHTML = '<span class="text-xs">⏳ Checking...</span>';
+    breachText.className = 'text-xl font-semibold text-gray-500';
 
-    // Show/hide breach alert
-    if (data.is_breached) {
-        breachAlert.classList.remove('hidden');
-        breachMessage.innerHTML = `WARNING: This password was found in ${data.breach_count.toLocaleString()} data breaches!
-            <a href="https://haveibeenpwned.com/Passwords" target="_blank" class="underline hover:text-red-900 font-bold">
-                Learn more →
-            </a>`;
-    } else {
-        breachAlert.classList.add('hidden');
-    }
+    // Hide breach alert initially (will be shown by updateBreachUI if needed)
+    breachAlert.classList.add('hidden');
 
-    // Show/hide enhance button (show if weak, medium, or breached)
-    if (data.is_breached || data.strength === 'Weak' || data.strength === 'Medium') {
+    // Show/hide enhance button (show if weak or medium, breach status handled separately)
+    if (data.strength === 'Weak' || data.strength === 'Medium') {
         enhanceButtonContainer.classList.remove('hidden');
     } else {
         enhanceButtonContainer.classList.add('hidden');
@@ -333,8 +399,6 @@ function shouldShowModal() {
 window.addEventListener('load', () => {
     if (shouldShowModal()) {
         privacyModal.classList.remove('hidden');
-    } else {
-        privacyModal.classList.add('hidden');
     }
 });
 
