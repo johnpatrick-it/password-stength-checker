@@ -110,6 +110,163 @@ enhancePasswordBtn.addEventListener('click', async () => {
     }
 });
 
+// ============================================
+// Password Generator
+// ============================================
+
+// DOM Elements for Generator
+const toggleGeneratorBtn = document.getElementById('toggleGenerator');
+const generatorOptions = document.getElementById('generatorOptions');
+const generatorArrow = document.getElementById('generatorArrow');
+const passwordLengthSlider = document.getElementById('passwordLength');
+const lengthValue = document.getElementById('lengthValue');
+const generatePasswordBtn = document.getElementById('generatePasswordBtn');
+const generatedPasswordDisplay = document.getElementById('generatedPasswordDisplay');
+const generatedPasswordText = document.getElementById('generatedPassword');
+const copyGeneratedPasswordBtn = document.getElementById('copyGeneratedPassword');
+const useGeneratedPasswordBtn = document.getElementById('useGeneratedPassword');
+
+// Checkboxes
+const includeUppercase = document.getElementById('includeUppercase');
+const includeLowercase = document.getElementById('includeLowercase');
+const includeNumbers = document.getElementById('includeNumbers');
+const includeSymbols = document.getElementById('includeSymbols');
+
+// Toggle generator section
+toggleGeneratorBtn.addEventListener('click', () => {
+    const isHidden = generatorOptions.classList.contains('hidden');
+
+    if (isHidden) {
+        generatorOptions.classList.remove('hidden');
+        generatorArrow.style.transform = 'rotate(180deg)';
+    } else {
+        generatorOptions.classList.add('hidden');
+        generatorArrow.style.transform = 'rotate(0deg)';
+    }
+});
+
+// Update length value display
+passwordLengthSlider.addEventListener('input', (e) => {
+    lengthValue.textContent = e.target.value;
+});
+
+// Generate password
+generatePasswordBtn.addEventListener('click', async () => {
+    const length = parseInt(passwordLengthSlider.value);
+    const uppercase = includeUppercase.checked;
+    const lowercase = includeLowercase.checked;
+    const numbers = includeNumbers.checked;
+    const symbols = includeSymbols.checked;
+
+    // Check if at least one option is selected
+    if (!uppercase && !lowercase && !numbers && !symbols) {
+        alert('Please select at least one character type!');
+        return;
+    }
+
+    // Show loading state
+    const originalHTML = generatePasswordBtn.innerHTML;
+    generatePasswordBtn.disabled = true;
+    generatePasswordBtn.innerHTML = `
+        <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Generating...</span>
+    `;
+
+    try {
+        const response = await fetch('/generate-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                length: length,
+                uppercase: uppercase,
+                lowercase: lowercase,
+                numbers: numbers,
+                symbols: symbols
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate password');
+        }
+
+        const data = await response.json();
+
+        // Display generated password
+        generatedPasswordText.textContent = data.password;
+        generatedPasswordDisplay.classList.remove('hidden');
+
+        // Reset button
+        generatePasswordBtn.innerHTML = originalHTML;
+        generatePasswordBtn.disabled = false;
+
+    } catch (error) {
+        console.error('Error generating password:', error);
+        generatePasswordBtn.innerHTML = originalHTML;
+        generatePasswordBtn.disabled = false;
+        alert('Failed to generate password. Please try again.');
+    }
+});
+
+// Copy generated password
+copyGeneratedPasswordBtn.addEventListener('click', async () => {
+    const password = generatedPasswordText.textContent;
+
+    if (!password) return;
+
+    try {
+        await navigator.clipboard.writeText(password);
+
+        // Show success feedback
+        const originalHTML = copyGeneratedPasswordBtn.innerHTML;
+        copyGeneratedPasswordBtn.innerHTML = `
+            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+        `;
+
+        setTimeout(() => {
+            copyGeneratedPasswordBtn.innerHTML = originalHTML;
+        }, 2000);
+
+    } catch (err) {
+        alert('Failed to copy password');
+    }
+});
+
+// Use generated password
+useGeneratedPasswordBtn.addEventListener('click', () => {
+    const password = generatedPasswordText.textContent;
+
+    if (!password) return;
+
+    // Put generated password in main input
+    passwordInput.value = password;
+
+    // Trigger password check
+    checkPassword(password);
+
+    // Scroll to results
+    resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Show success feedback
+    const originalHTML = useGeneratedPasswordBtn.innerHTML;
+    useGeneratedPasswordBtn.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>Password Applied!</span>
+    `;
+
+    setTimeout(() => {
+        useGeneratedPasswordBtn.innerHTML = originalHTML;
+    }, 2000);
+});
+
 // Show copy feedback
 function showCopyFeedback(message, success) {
     const originalHTML = copyPasswordBtn.innerHTML;
@@ -225,11 +382,14 @@ async function checkBreach(password) {
 
 // Update breach status in UI
 function updateBreachUI(breachData) {
+    const breachBox = document.getElementById('breachBox');
+
     // Check if API is unavailable
     if (breachData.api_available === false) {
         // API is down - show warning
         breachText.textContent = '⚠️ Unavailable';
         breachText.className = 'text-xl font-semibold text-yellow-600';
+        breachBox.className = 'bg-gray-50 rounded-lg p-4 border-2 border-yellow-500 transition-all duration-300';
 
         // Show API unavailable banner
         showAPIWarning();
@@ -244,6 +404,7 @@ function updateBreachUI(breachData) {
 
     breachText.textContent = breachData.is_breached ? '🚨 Yes' : '✓ No';
     breachText.className = `text-xl font-semibold ${breachData.is_breached ? 'text-red-600' : 'text-green-600'}`;
+    breachBox.className = `bg-gray-50 rounded-lg p-4 border-2 ${breachData.is_breached ? 'border-red-500' : 'border-green-500'} transition-all duration-300`;
 
     // Show/hide breach alert
     if (breachData.is_breached) {
@@ -303,18 +464,38 @@ function updateUI(data) {
     strengthBar.style.width = `${data.score}%`;
     strengthBar.className = `h-3 rounded-full transition-all duration-500 ease-out ${getStrengthBgColor(data.strength)}`;
 
-    // Update stats
+    // Update stats with border highlighting
     lengthText.textContent = `${data.length} chars`;
 
+    // Highlight length box based on password length
+    const lengthBox = document.getElementById('lengthBox');
+    if (data.length >= 16) {
+        lengthBox.className = 'bg-gray-50 rounded-lg p-4 relative group border-2 border-green-500 transition-all duration-300';
+    } else if (data.length >= 12) {
+        lengthBox.className = 'bg-gray-50 rounded-lg p-4 relative group border-2 border-blue-400 transition-all duration-300';
+    } else if (data.length >= 8) {
+        lengthBox.className = 'bg-gray-50 rounded-lg p-4 relative group border-2 border-yellow-500 transition-all duration-300';
+    } else {
+        lengthBox.className = 'bg-gray-50 rounded-lg p-4 relative group border-2 border-red-500 transition-all duration-300';
+    }
+
+    // Highlight common password box
+    const commonBox = document.getElementById('commonBox');
     commonText.textContent = data.is_common ? '⚠️ Yes' : '✓ No';
     commonText.className = `text-xl font-semibold ${data.is_common ? 'text-red-600' : 'text-green-600'}`;
+    commonBox.className = `bg-gray-50 rounded-lg p-4 border-2 ${data.is_common ? 'border-red-500' : 'border-green-500'} transition-all duration-300`;
 
+    // Highlight patterns box
+    const patternsBox = document.getElementById('patternsBox');
     patternsText.textContent = data.has_patterns ? '⚠️ Yes' : '✓ No';
     patternsText.className = `text-xl font-semibold ${data.has_patterns ? 'text-orange-600' : 'text-green-600'}`;
+    patternsBox.className = `bg-gray-50 rounded-lg p-4 border-2 ${data.has_patterns ? 'border-orange-500' : 'border-green-500'} transition-all duration-300`;
 
     // Set breach to loading state (will be updated by checkBreach function)
+    const breachBox = document.getElementById('breachBox');
     breachText.innerHTML = '<span class="text-xs">⏳ Checking...</span>';
     breachText.className = 'text-xl font-semibold text-gray-500';
+    breachBox.className = 'bg-gray-50 rounded-lg p-4 border-2 border-gray-300 transition-all duration-300';
 
     // Hide breach alert initially (will be shown by updateBreachUI if needed)
     breachAlert.classList.add('hidden');

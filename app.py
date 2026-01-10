@@ -503,6 +503,58 @@ def generate_strong_password(length=16):
     return ''.join(password_chars)
 
 
+def generate_custom_password(length=16, use_uppercase=True, use_lowercase=True, use_numbers=True, use_symbols=True):
+    """
+    Generate a custom password based on user preferences
+
+    Args:
+        length: Password length (8-32)
+        use_uppercase: Include uppercase letters
+        use_lowercase: Include lowercase letters
+        use_numbers: Include numbers
+        use_symbols: Include symbols
+
+    Returns:
+        Generated password string
+    """
+    # Build character pool based on preferences
+    char_pool = ''
+    required_chars = []
+
+    if use_lowercase:
+        char_pool += string.ascii_lowercase
+        required_chars.append(random.choice(string.ascii_lowercase))
+
+    if use_uppercase:
+        char_pool += string.ascii_uppercase
+        required_chars.append(random.choice(string.ascii_uppercase))
+
+    if use_numbers:
+        char_pool += string.digits
+        required_chars.append(random.choice(string.digits))
+
+    if use_symbols:
+        char_pool += '!@#$%^&*'
+        required_chars.append(random.choice('!@#$%^&*'))
+
+    # If no options selected, default to all
+    if not char_pool:
+        return generate_strong_password(length)
+
+    # Generate password
+    password_chars = required_chars.copy()
+
+    # Fill remaining length
+    remaining = length - len(required_chars)
+    if remaining > 0:
+        password_chars.extend(random.choices(char_pool, k=remaining))
+
+    # Shuffle to avoid predictable pattern
+    random.shuffle(password_chars)
+
+    return ''.join(password_chars)
+
+
 # Route for homepage
 @app.route('/')
 def index():
@@ -554,6 +606,37 @@ def enhance_password_endpoint():
     result['enhanced_password'] = enhanced
 
     return jsonify(result)
+
+
+# Route for generating passwords
+@app.route('/generate-password', methods=['POST'])
+def generate_password_endpoint():
+    """API endpoint to generate a custom password"""
+    data = request.json or {}
+
+    # Get parameters from request
+    length = int(data.get('length', 16))
+    use_uppercase = data.get('uppercase', True)
+    use_lowercase = data.get('lowercase', True)
+    use_numbers = data.get('numbers', True)
+    use_symbols = data.get('symbols', True)
+
+    # Validate length
+    length = max(8, min(32, length))
+
+    # Generate password
+    generated_password = generate_custom_password(
+        length=length,
+        use_uppercase=use_uppercase,
+        use_lowercase=use_lowercase,
+        use_numbers=use_numbers,
+        use_symbols=use_symbols
+    )
+
+    return jsonify({
+        'password': generated_password,
+        'length': len(generated_password)
+    })
 
 
 # Run the app
