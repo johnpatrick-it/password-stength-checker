@@ -225,6 +225,23 @@ async function checkBreach(password) {
 
 // Update breach status in UI
 function updateBreachUI(breachData) {
+    // Check if API is unavailable
+    if (breachData.api_available === false) {
+        // API is down - show warning
+        breachText.textContent = '⚠️ Unavailable';
+        breachText.className = 'text-xl font-semibold text-yellow-600';
+
+        // Show API unavailable banner
+        showAPIWarning();
+
+        // Hide breach alert
+        breachAlert.classList.add('hidden');
+        return;
+    }
+
+    // API is working - show normal breach status
+    hideAPIWarning();
+
     breachText.textContent = breachData.is_breached ? '🚨 Yes' : '✓ No';
     breachText.className = `text-xl font-semibold ${breachData.is_breached ? 'text-red-600' : 'text-green-600'}`;
 
@@ -252,6 +269,22 @@ function updateBreachUI(breachData) {
         enhanceButtonContainer.classList.remove('hidden');
     } else {
         breachAlert.classList.add('hidden');
+    }
+}
+
+// Show API unavailable warning banner
+function showAPIWarning() {
+    const apiWarning = document.getElementById('apiWarning');
+    if (apiWarning) {
+        apiWarning.classList.remove('hidden');
+    }
+}
+
+// Hide API warning banner
+function hideAPIWarning() {
+    const apiWarning = document.getElementById('apiWarning');
+    if (apiWarning) {
+        apiWarning.classList.add('hidden');
     }
 }
 

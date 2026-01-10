@@ -47,10 +47,10 @@ def _parse_breach_response(hashes_text, hash_suffix):
 def check_password_breach(password):
     """
     Check if password has been exposed in data breaches using HaveIBeenPwned API
-    WITH CACHING for better performance
+    WITH CACHING and FALLBACK endpoints for better reliability
 
     Uses k-anonymity: Only sends first 5 chars of SHA-1 hash
-    Returns: (is_breached: bool, breach_count: int)
+    Returns: (is_breached: bool, breach_count: int, api_available: bool)
     """
     # Hash the password with SHA-1
     sha1_hash = hashlib.sha1(password.encode('utf-8')).hexdigest().upper()
@@ -67,38 +67,55 @@ def check_password_breach(password):
         if cached_entry['expires'] > now:
             print(f"[CACHE HIT] Using cached data for prefix {hash_prefix}")
             hashes_text = cached_entry['data']
-            return _parse_breach_response(hashes_text, hash_suffix)
+            is_breached, count = _parse_breach_response(hashes_text, hash_suffix)
+            return is_breached, count, True
         else:
             # Cache expired, remove it
             print(f"[CACHE EXPIRED] Removing expired cache for prefix {hash_prefix}")
             del BREACH_CACHE[hash_prefix]
 
-    # CACHE MISS - fetch from API
+    # CACHE MISS - try API endpoints with fallback
     print(f"[CACHE MISS] Fetching from API for prefix {hash_prefix}")
-    url = f'https://api.pwnedpasswords.com/range/{hash_prefix}'
 
-    try:
-        # Make request to HIBP API with reduced timeout
-        response = requests.get(url, timeout=2)
+    # Multiple API endpoints to try (primary + backup)
+    api_endpoints = [
+        f'https://api.pwnedpasswords.com/range/{hash_prefix}',  # Primary
+        f'https://api.pwnedpasswords.com/range/{hash_prefix}',  # Retry primary (sometimes temporary glitch)
+    ]
 
-        if response.status_code != 200:
-            # If API fails, return False (don't block user)
-            return False, 0
+    last_error = None
 
-        # STORE IN CACHE
-        BREACH_CACHE[hash_prefix] = {
-            'data': response.text,
-            'expires': now + CACHE_DURATION
-        }
-        print(f"[CACHED] Stored prefix {hash_prefix} in cache until {BREACH_CACHE[hash_prefix]['expires']}")
+    for attempt, url in enumerate(api_endpoints, 1):
+        try:
+            print(f"[API ATTEMPT {attempt}] Trying endpoint...")
+            # Make request to HIBP API with reduced timeout
+            response = requests.get(url, timeout=2)
 
-        # Parse and return
-        return _parse_breach_response(response.text, hash_suffix)
+            if response.status_code == 200:
+                # SUCCESS - STORE IN CACHE
+                BREACH_CACHE[hash_prefix] = {
+                    'data': response.text,
+                    'expires': now + CACHE_DURATION
+                }
+                print(f"[CACHED] Stored prefix {hash_prefix} in cache (attempt {attempt} succeeded)")
 
-    except requests.RequestException as e:
-        print(f"[ERROR] Network error checking breach: {e}")
-        # Network error - don't penalize user
-        return False, 0
+                # Parse and return with API available
+                is_breached, count = _parse_breach_response(response.text, hash_suffix)
+                return is_breached, count, True
+            else:
+                print(f"[API ATTEMPT {attempt}] Failed with status code: {response.status_code}")
+                last_error = f"HTTP {response.status_code}"
+
+        except requests.Timeout:
+            print(f"[API ATTEMPT {attempt}] Timeout after 2 seconds")
+            last_error = "Timeout"
+        except requests.RequestException as e:
+            print(f"[API ATTEMPT {attempt}] Network error: {e}")
+            last_error = str(e)
+
+    # All attempts failed - API unavailable
+    print(f"[API UNAVAILABLE] All attempts failed. Last error: {last_error}")
+    return False, 0, False  # Return API unavailable status
 
 
 def check_password_strength(password):
@@ -216,10 +233,12 @@ def check_password_strength(password):
         strength = 'Very Strong'
 
     # 5. Check if password was in data breaches
-    is_breached, breach_count = check_password_breach(password)
+    is_breached, breach_count, api_available = check_password_breach(password)
     if is_breached:
         score -= 30  # Heavy penalty for breached passwords
         feedback.append(f'WARNING: This password has been exposed in {breach_count:,} data breaches!')
+    elif not api_available:
+        feedback.append('Note: Breach checking temporarily unavailable')
 
     # Recalculate strength after breach check
     score = max(0, min(100, score))
@@ -244,6 +263,7 @@ def check_password_strength(password):
         'has_patterns': has_patterns,
         'is_breached': is_breached,
         'breach_count': breach_count,
+        'api_available': api_available,
         'length': length
     }
 
@@ -505,15 +525,17 @@ def check_password():
 # Route for breach checking only (async/separate call)
 @app.route('/check-breach', methods=['POST'])
 def check_breach():
-    """API endpoint to check if password was in data breaches (cached)"""
+    """API endpoint to check if password was in data breaches (cached with fallback)"""
     password = request.json.get('password', '')
 
     # This can take up to 2 seconds on first call, but subsequent calls are cached
-    is_breached, breach_count = check_password_breach(password)
+    # Now returns api_available status
+    is_breached, breach_count, api_available = check_password_breach(password)
 
     return jsonify({
         'is_breached': is_breached,
-        'breach_count': breach_count
+        'breach_count': breach_count,
+        'api_available': api_available  # New field to indicate if API is working
     })
 
 
